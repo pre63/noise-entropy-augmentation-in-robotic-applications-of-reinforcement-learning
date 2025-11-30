@@ -59,7 +59,7 @@ def prepare_lists(variant_dict):
       entropies = run_data.get("rollout_metrics", {}).get("entropy_mean", [])
       episode_entropies_list.append(entropies)
 
-      eps = [{"reward": r, "end_timestep": t} for r, t in zip(episode_rewards[i], episode_end_timesteps[i])]
+      eps = [{"return": r, "end_timestep": t} for r, t in zip(episode_rewards[i], episode_end_timesteps[i])]
       episode_list.append(eps)
 
     inference_means_list = [run_data.get("inference_mean_reward", 0.0) for _, run_data in runs_data]
@@ -85,17 +85,17 @@ def compute_episode_auc(run_eps, run_total_ts):
   if not run_eps:
     return 0.0
   auc = 0.0
-  prev_rew = 0.0
+  prev_ret = 0.0
   prev_ts = 0
   for ep in run_eps:
     end_ts = ep["end_timestep"]
     length = end_ts - prev_ts
-    auc += prev_rew * length
-    prev_rew = ep["reward"]
+    auc += prev_ret * length
+    prev_ret = ep["return"]
     prev_ts = end_ts
   if prev_ts < run_total_ts:
     length = run_total_ts - prev_ts
-    auc += prev_rew * length
+    auc += prev_ret * length
   return auc
 
 
@@ -110,17 +110,17 @@ def compute_variant_metrics(variant, step_rewards_list, episode_list, episode_en
       "std_max_reward": 0.0,
       "avg_max_timestep_percent": 0.0,
       "std_max_timestep_percent": 0.0,
-      "avg_episode_reward": 0.0,
-      "std_episode_reward": 0.0,
-      "avg_max_episode_reward": 0.0,
-      "std_max_episode_reward": 0.0,
-      "median_max_episode_reward": 0.0,
+      "avg_episode_return": 0.0,
+      "std_episode_return": 0.0,
+      "avg_max_episode_return": 0.0,
+      "std_max_episode_return": 0.0,
+      "median_max_episode_return": 0.0,
       "avg_max_episode_timestep_percent": 0.0,
       "std_max_episode_timestep_percent": 0.0,
       "avg_auc_episode": 0.0,
       "std_auc_episode": 0.0,
-      "avg_final_episode_reward": 0.0,
-      "std_final_episode_reward": 0.0,
+      "avg_final_episode_return": 0.0,
+      "std_final_episode_return": 0.0,
       "avg_episode_entropy": "No Data",
       "std_episode_entropy": "No Data",
       "avg_inference_mean": 0.0,
@@ -143,15 +143,15 @@ def compute_variant_metrics(variant, step_rewards_list, episode_list, episode_en
   std_max_step_timestep_percent = np.std(per_run_percent_step)
 
   # Episode metrics
-  per_run_all_ep_rewards = [[ep["reward"] for ep in run_eps] for run_eps in episode_list]
-  per_run_avg_ep = [np.mean(run_rews) if run_rews else 0.0 for run_rews in per_run_all_ep_rewards]
-  avg_episode_reward = np.mean(per_run_avg_ep)
-  std_episode_reward = np.std(per_run_avg_ep)
-  per_run_max_ep = [max(run_rews, default=0.0) for run_rews in per_run_all_ep_rewards]
-  avg_max_episode_reward = np.mean(per_run_max_ep)
-  std_max_episode_reward = np.std(per_run_max_ep)
-  median_max_episode_reward = np.median(per_run_max_ep)
-  per_run_argmax_ep = [np.argmax(run_rews) if run_rews else 0 for run_rews in per_run_all_ep_rewards]
+  per_run_all_ep_returns = [[ep["return"] for ep in run_eps] for run_eps in episode_list]
+  per_run_avg_ep = [np.mean(run_rets) if run_rets else 0.0 for run_rets in per_run_all_ep_returns]
+  avg_episode_return = np.mean(per_run_avg_ep)
+  std_episode_return = np.std(per_run_avg_ep)
+  per_run_max_ep = [max(run_rets, default=0.0) for run_rets in per_run_all_ep_returns]
+  avg_max_episode_return = np.mean(per_run_max_ep)
+  std_max_episode_return = np.std(per_run_max_ep)
+  median_max_episode_return = np.median(per_run_max_ep)
+  per_run_argmax_ep = [np.argmax(run_rets) if run_rets else 0 for run_rets in per_run_all_ep_returns]
   per_run_timestep_ep_percent = []
   for r in range(num_variant_runs):
     run_eps = episode_list[r]
@@ -166,24 +166,24 @@ def compute_variant_metrics(variant, step_rewards_list, episode_list, episode_en
   avg_max_episode_timestep_percent = np.mean(per_run_timestep_ep_percent)
   std_max_episode_timestep_percent = np.std(per_run_timestep_ep_percent)
 
-  # AUC for episode reward curve
+  # AUC for episode return curve
   per_run_auc = [compute_episode_auc(episode_list[r], per_run_total_steps[r]) for r in range(num_variant_runs)]
   avg_auc_episode = np.mean(per_run_auc)
   std_auc_episode = np.std(per_run_auc)
 
-  # Final average episode reward (last 20% of timesteps)
+  # Final average episode return (last 20% of timesteps)
   per_run_final_avg = []
   for r in range(num_variant_runs):
     run_eps = episode_list[r]
     run_total_ts = per_run_total_steps[r]
     threshold_ts = 0.8 * run_total_ts
-    final_rews = [ep["reward"] for ep in run_eps if ep["end_timestep"] > threshold_ts]
-    if final_rews:
-      per_run_final_avg.append(np.mean(final_rews))
+    final_rets = [ep["return"] for ep in run_eps if ep["end_timestep"] > threshold_ts]
+    if final_rets:
+      per_run_final_avg.append(np.mean(final_rets))
     else:
-      per_run_final_avg.append(avg_episode_reward)  # fallback
-  avg_final_episode_reward = np.mean(per_run_final_avg)
-  std_final_episode_reward = np.std(per_run_final_avg)
+      per_run_final_avg.append(avg_episode_return)  # fallback
+  avg_final_episode_return = np.mean(per_run_final_avg)
+  std_final_episode_return = np.std(per_run_final_avg)
 
   # Entropy metrics
   per_run_all_ep_entropies = episode_entropies_list
@@ -214,17 +214,17 @@ def compute_variant_metrics(variant, step_rewards_list, episode_list, episode_en
     "std_max_reward": std_max_step_reward,
     "avg_max_timestep_percent": avg_max_step_timestep_percent,
     "std_max_timestep_percent": std_max_step_timestep_percent,
-    "avg_episode_reward": avg_episode_reward,
-    "std_episode_reward": std_episode_reward,
-    "avg_max_episode_reward": avg_max_episode_reward,
-    "std_max_episode_reward": std_max_episode_reward,
-    "median_max_episode_reward": median_max_episode_reward,
+    "avg_episode_return": avg_episode_return,
+    "std_episode_return": std_episode_return,
+    "avg_max_episode_return": avg_max_episode_return,
+    "std_max_episode_return": std_max_episode_return,
+    "median_max_episode_return": median_max_episode_return,
     "avg_max_episode_timestep_percent": avg_max_episode_timestep_percent,
     "std_max_episode_timestep_percent": std_max_episode_timestep_percent,
     "avg_auc_episode": avg_auc_episode,
     "std_auc_episode": std_auc_episode,
-    "avg_final_episode_reward": avg_final_episode_reward,
-    "std_final_episode_reward": std_final_episode_reward,
+    "avg_final_episode_return": avg_final_episode_return,
+    "std_final_episode_return": std_final_episode_return,
     "avg_episode_entropy": avg_episode_entropy,
     "std_episode_entropy": std_episode_entropy,
     "avg_inference_mean": avg_inference_mean,
@@ -330,16 +330,16 @@ def plot_episode_rewards(
       if not ep_infos:
         continue
       end_tss = [ep["end_timestep"] for ep in ep_infos]
-      rews = [ep["reward"] for ep in ep_infos]
+      rets = [ep["return"] for ep in ep_infos]
       y = np.full(total_timesteps, np.nan)
       prev_ts = 0
-      last_rew = 0.0
-      for k in range(len(rews)):
+      last_ret = 0.0
+      for k in range(len(rets)):
         end_idx = min(end_tss[k], total_timesteps)
-        y[prev_ts:end_idx] = last_rew
-        last_rew = rews[k]
+        y[prev_ts:end_idx] = last_ret
+        last_ret = rets[k]
         prev_ts = end_idx
-      y[prev_ts : min(prev_ts + (total_timesteps - prev_ts), total_timesteps)] = last_rew
+      y[prev_ts : min(prev_ts + (total_timesteps - prev_ts), total_timesteps)] = last_ret
       ys.append(y)
     if ys:
       ys_np = np.array(ys)
@@ -359,10 +359,9 @@ def plot_episode_rewards(
   labels = [labels[i] for i in sorted_indices]
 
   plt.xlabel("Timesteps")
-  plt.ylabel("Episode Reward (Mean ± Std)")
+  plt.ylabel("Average Return")
   plt.title(title)
-  plt.legend(handles, labels)
-  plt.grid(True)
+  plt.legend(handles, labels, loc="upper left")
   plt.savefig(os.path.join(compare_dir, filename))
   plt.close()
 
@@ -427,12 +426,11 @@ def plot_episode_entropies(
     sorted_indices = sorted(range(len(labels)), key=lambda i: perf_dict[labels[i]], reverse=True)
     handles = [handles[i] for i in sorted_indices]
     labels = [labels[i] for i in sorted_indices]
-    plt.legend(handles, labels)
+    plt.legend(handles, labels, loc="upper left")
 
   plt.xlabel("Timesteps")
-  plt.ylabel("Episode Entropy (Mean ± Std)")
+  plt.ylabel("Entropy")
   plt.title(title)
-  plt.grid(True)
   plt.savefig(os.path.join(compare_dir, filename))
   plt.close()
 
@@ -465,10 +463,9 @@ def plot_step_rewards(
   labels = [labels[i] for i in sorted_indices]
 
   plt.xlabel("Timesteps")
-  plt.ylabel("Step Reward (Mean ± Std)")
+  plt.ylabel("Reward")
   plt.title(title)
-  plt.legend(handles, labels)
-  plt.grid(True)
+  plt.legend(handles, labels, loc="upper left")
   plt.savefig(os.path.join(compare_dir, filename))
   plt.close()
 
@@ -491,9 +488,8 @@ def plot_inference_bar(variant_names, variant_names_list, inference_means_lists,
   colors_list = [color_map[v] for v in variant_names_list]
   plt.bar(variant_names_list, inference_means, yerr=inference_stds, capsize=5, color=colors_list)
   plt.xlabel("Variants")
-  plt.ylabel("Inference Mean Reward (Mean ± Std across runs)")
+  plt.ylabel("Average Test Return (Mean ± Std across runs)")
   plt.title(title)
-  plt.grid(True)
   plt.savefig(os.path.join(compare_dir, filename))
   plt.close()
 
@@ -503,73 +499,79 @@ def plot_scatter_variations(perfs, compare_dir, filename, title):
     return
   plt.figure(figsize=(10, 8))
   for p in perfs:
-    plt.scatter(p["avg_auc_episode"], p["avg_final_episode_reward"], label=p["variant"])
-  plt.xlabel("Average AUC Episode Reward")
-  plt.ylabel("Average Final Episode Reward")
+    plt.scatter(p["avg_auc_episode"], p["avg_final_episode_return"], label=p["variant"])
+  plt.xlabel("Area Under the Curve")
+  plt.ylabel("Average Final Return")
   plt.title(title)
-  plt.legend()
-  plt.grid(True)
+  plt.legend(loc="upper left")
   plt.savefig(os.path.join(compare_dir, filename))
   plt.close()
 
 
-def generate_report(model_performances, env_id):
-  print(f"# Model Performance Report for {env_id}")
-  print("## Ranked by average AUC of episode reward curve")
-  for rank, perf in enumerate(model_performances, 1):
-    print(f"### Rank {rank}: {perf['variant']}")
-    print(f"- Average Step Reward: {perf['avg_reward']:.4f} (± {perf['std_reward']:.4f})")
-    print(f"- Average Max Step Reward: {perf['avg_max_reward']:.4f} (± {perf['std_max_reward']:.4f})")
-    print(
-      f"- Sample Efficiency - Average Timestep at Max Step Reward (%): {perf['avg_max_timestep_percent']:.2f}% (± {perf['std_max_timestep_percent']:.2f}%)\n"
-    )
-    print(f"- Average Episode Reward: {perf['avg_episode_reward']:.4f} (± {perf['std_episode_reward']:.4f})")
-    print(f"- Average Max Episode Reward: {perf['avg_max_episode_reward']:.4f} (± {perf['std_max_episode_reward']:.4f})")
-    print(f"- Median Max Episode Reward: {perf['median_max_episode_reward']:.4f}")
-    print(
-      f"- Sample Efficiency - Average Timestep at Max Episode Reward (%): {perf['avg_max_episode_timestep_percent']:.2f}% (± {perf['std_max_episode_timestep_percent']:.2f}%)\n"
-    )
-    print(f"- Average AUC Episode Reward: {perf['avg_auc_episode']:.4f} (± {perf['std_auc_episode']:.4f})")
-    print(f"- Average Final Episode Reward (last 20% timesteps): {perf['avg_final_episode_reward']:.4f} (± {perf['std_final_episode_reward']:.4f})")
-    entropy_str = (
-      perf["avg_episode_entropy"]
-      if isinstance(perf["avg_episode_entropy"], str)
-      else f"{perf['avg_episode_entropy']:.4f} (± {perf['std_episode_entropy']:.4f})"
-    )
-    print(f"- Average Episode Entropy: {entropy_str}")
-    print(f"- Average Inference Mean Reward: {perf['avg_inference_mean']:.4f} (± {perf['std_inference_mean']:.4f})")
-    print(f"- Average Inference Std Reward: {perf['avg_inference_std']:.4f}")
-    print(f"- Inference Stability (mean/std): {perf['inference_stability']:.4f}")
+def generate_report(model_performances, env_id, md_file):
+  with open(md_file, "a") as f:
+    f.write(f"# Model Performance Report for {env_id}\n")
+    f.write("## Ranked by average AUC of episode return curve")
+    for rank, perf in enumerate(model_performances, 1):
+      f.write(f"### Rank {rank}: {perf['variant']}")
+      f.write(f"- Average Reward: {perf['avg_reward']:.4f} (± {perf['std_reward']:.4f})")
+      f.write(f"- Average Max Reward: {perf['avg_max_reward']:.4f} (± {perf['std_max_reward']:.4f})")
+      f.write(
+        f"- Sample Efficiency - Average Timestep at Max Reward (%): {perf['avg_max_timestep_percent']:.2f}% (± {perf['std_max_timestep_percent']:.2f}%)\n"
+      )
+      f.write(f"- Average Return: {perf['avg_episode_return']:.4f} (± {perf['std_episode_return']:.4f})")
+      f.write(f"- Average Max Return: {perf['avg_max_episode_return']:.4f} (± {perf['std_max_episode_return']:.4f})")
+      f.write(f"- Median Max Return: {perf['median_max_episode_return']:.4f}")
+      f.write(
+        f"- Sample Efficiency - Average Timestep at Max Return (%): {perf['avg_max_episode_timestep_percent']:.2f}% (± {perf['std_max_episode_timestep_percent']:.2f}%)\n"
+      )
+      f.write(f"- Average AUC Episode Return: {perf['avg_auc_episode']:.4f} (± {perf['std_auc_episode']:.4f})")
+      f.write(f"- Average Final Return (last 20% timesteps): {perf['avg_final_episode_return']:.4f} (± {perf['std_final_episode_return']:.4f})")
+      entropy_str = (
+        perf["avg_episode_entropy"]
+        if isinstance(perf["avg_episode_entropy"], str)
+        else f"{perf['avg_episode_entropy']:.4f} (± {perf['std_episode_entropy']:.4f})"
+      )
+      f.write(f"- Average Entropy: {entropy_str}")
+      f.write(f"- Average Test Return: {perf['avg_inference_mean']:.4f} (± {perf['std_inference_mean']:.4f})")
+      f.write(f"- Average Test Std Return: {perf['avg_inference_std']:.4f}")
+      f.write(f"- Test Stability (mean/std): {perf['inference_stability']:.4f}\n")
 
-  print("\n## Alternative Rankings")
+    f.write("## Alternative Rankings\n")
 
-  auc_sorted = sorted(model_performances, key=lambda x: x["avg_auc_episode"], reverse=True)
-  print("### Ranked by average AUC of episode reward curve")
-  for rank, perf in enumerate(auc_sorted, 1):
-    print(f"- Rank {rank}: {perf['variant']} (AUC: {perf['avg_auc_episode']:.4f})")
+    auc_sorted = sorted(model_performances, key=lambda x: x["avg_auc_episode"], reverse=True)
+    f.write("### Ranked by average AUC of episode return curve")
+    for rank, perf in enumerate(auc_sorted, 1):
+      f.write(f"- Rank {rank}: {perf['variant']} (AUC: {perf['avg_auc_episode']:.4f})")
+    f.write("")
 
-  final_sorted = sorted(model_performances, key=lambda x: x["avg_final_episode_reward"], reverse=True)
-  print("### Ranked by average final episode reward (last 20% timesteps)")
-  for rank, perf in enumerate(final_sorted, 1):
-    print(f"- Rank {rank}: {perf['variant']} (Final Avg: {perf['avg_final_episode_reward']:.4f})")
+    final_sorted = sorted(model_performances, key=lambda x: x["avg_final_episode_return"], reverse=True)
+    f.write("### Ranked by average final return (last 20% timesteps)")
+    for rank, perf in enumerate(final_sorted, 1):
+      f.write(f"- Rank {rank}: {perf['variant']} (Final Avg: {perf['avg_final_episode_return']:.4f})")
+    f.write("")
 
-  median_sorted = sorted(model_performances, key=lambda x: x["median_max_episode_reward"], reverse=True)
-  print("### Ranked by median max episode reward")
-  for rank, perf in enumerate(median_sorted, 1):
-    print(f"- Rank {rank}: {perf['variant']} (Median Max: {perf['median_max_episode_reward']:.4f})")
+    median_sorted = sorted(model_performances, key=lambda x: x["median_max_episode_return"], reverse=True)
+    f.write("### Ranked by median max return")
+    for rank, perf in enumerate(median_sorted, 1):
+      f.write(f"- Rank {rank}: {perf['variant']} (Median Max: {perf['median_max_episode_return']:.4f})")
+    f.write("")
 
-  print("\n## Performance Comparison Table (Mean ± Std over runs)")
-  print("| Variant | Final Reward | AUC | Max Reward | Median Max Reward | Entropy |")
-  print("|---------|--------------|-----|------------|-------------------|---------|")
-  for perf in sorted(model_performances, key=lambda x: x["avg_final_episode_reward"], reverse=True):
-    final_str = f"{perf['avg_final_episode_reward']:.4f} ± {perf['std_final_episode_reward']:.4f}"
-    auc_str = f"{perf['avg_auc_episode']:.4f} ± {perf['std_auc_episode']:.4f}"
-    max_str = f"{perf['avg_max_episode_reward']:.4f} ± {perf['std_max_episode_reward']:.4f}"
-    median_str = f"{perf['median_max_episode_reward']:.4f}"
-    entropy_str = (
-      perf["avg_episode_entropy"] if isinstance(perf["avg_episode_entropy"], str) else f"{perf['avg_episode_entropy']:.4f} ± {perf['std_episode_entropy']:.4f}"
-    )
-    print(f"| {perf['variant']} | {final_str} | {auc_str} | {max_str} | {median_str} | {entropy_str} |")
+    f.write("## Performance Comparison Table (Mean ± Std over runs)\n")
+    f.write("| Variant | Final Return | AUC | Max Return | Median Max Return | Entropy |")
+    f.write("|---------|--------------|-----|------------|-------------------|---------|")
+    for perf in sorted(model_performances, key=lambda x: x["avg_final_episode_return"], reverse=True):
+      final_str = f"{perf['avg_final_episode_return']:.4f} ± {perf['std_final_episode_return']:.4f}"
+      auc_str = f"{perf['avg_auc_episode']:.4f} ± {perf['std_auc_episode']:.4f}"
+      max_str = f"{perf['avg_max_episode_return']:.4f} ± {perf['std_max_episode_return']:.4f}"
+      median_str = f"{perf['median_max_episode_return']:.4f}"
+      entropy_str = (
+        perf["avg_episode_entropy"]
+        if isinstance(perf["avg_episode_entropy"], str)
+        else f"{perf['avg_episode_entropy']:.4f} ± {perf['std_episode_entropy']:.4f}"
+      )
+      f.write(f"| {perf['variant']} | {final_str} | {auc_str} | {max_str} | {median_str} | {entropy_str} |")
+    f.write("")
 
 
 def report(compare_dir, env_id):
@@ -579,7 +581,7 @@ def report(compare_dir, env_id):
 
   variant_names, step_rewards_lists, episode_lists, episode_entropies_lists, inference_means_lists, inference_stds_lists = prepare_lists(variant_dict)
 
-  colors = plt.get_cmap("tab20")(np.linspace(0, 1, len(variant_names)))
+  colors = plt.get_cmap("tab10")(np.linspace(0, 1, len(variant_names)))
   color_map = dict(zip(variant_names, colors))
 
   total_timesteps, downsample_factor, timesteps_np = compute_timesteps_and_downsample(step_rewards_lists)
@@ -619,7 +621,7 @@ def report(compare_dir, env_id):
     perf_dict,
     compare_dir,
     "step_plot.png",
-    f"Step Reward Training Performance Comparison on {env_id} (Top Variants)",
+    f"Reward Training Performance Comparison on {env_id} (Top Variants)",
   )
 
   plot_episode_rewards(
@@ -633,7 +635,7 @@ def report(compare_dir, env_id):
     perf_dict,
     compare_dir,
     "episode_plot.png",
-    f"Episode Reward Training Performance Comparison on {env_id} (Top Variants)",
+    f"Average Return Training Performance Comparison on {env_id} (Top Variants)",
   )
 
   plot_episode_entropies(
@@ -648,7 +650,7 @@ def report(compare_dir, env_id):
     perf_dict,
     compare_dir,
     "entropy_plot.png",
-    f"Episode Entropy Training Performance Comparison on {env_id} (Top Variants)",
+    f"Entropy Training Performance Comparison on {env_id} (Top Variants)",
   )
 
   plot_inference_bar(
@@ -659,7 +661,7 @@ def report(compare_dir, env_id):
     color_map,
     compare_dir,
     "inference_plot.png",
-    f"Inference Performance Comparison on {env_id} (Top Variants)",
+    f"Average Test Return Comparison on {env_id} (Top Variants)",
   )
 
   if trpor_noise_variants:
@@ -675,7 +677,7 @@ def report(compare_dir, env_id):
       perf_dict,
       compare_dir,
       "episode_trpor_noise_delta.png",
-      f"Episode Reward: TRPOR and Top 2 Noise Variants by AUC Delta on {env_id}",
+      f"Average Return: TRPOR and Top 2 Noise Variants by AUC Delta on {env_id}",
     )
 
   if trpo_noise_variants:
@@ -691,7 +693,7 @@ def report(compare_dir, env_id):
       perf_dict,
       compare_dir,
       "episode_trpo_noise_delta.png",
-      f"Episode Reward: TRPO and Top 2 Noise Variants by AUC Delta on {env_id}",
+      f"Average Return: TRPO and Top 2 Noise Variants by AUC Delta on {env_id}",
     )
 
   if best_vs_trpo_variants:
@@ -707,7 +709,7 @@ def report(compare_dir, env_id):
       perf_dict,
       compare_dir,
       "episode_best_vs_trpo.png",
-      f"Episode Reward: Best Model vs TRPO on {env_id}",
+      f"Average Return: Best Model vs TRPO on {env_id}",
     )
 
   if best_trpor_vs_equiv_trpo:
@@ -723,7 +725,7 @@ def report(compare_dir, env_id):
       perf_dict,
       compare_dir,
       "episode_best_trpor_vs_equiv_trpo.png",
-      f"Episode Reward: Best TRPOR Variant vs Equivalent TRPO on {env_id}",
+      f"Average Return: Best TRPOR Variant vs Equivalent TRPO on {env_id}",
     )
 
   # Best vs worst noise for TRPOR
@@ -745,7 +747,7 @@ def report(compare_dir, env_id):
       perf_dict,
       compare_dir,
       "episode_trpor_best_worst_noise.png",
-      f"Episode Reward: Best vs Worst TRPOR Noise on {env_id}",
+      f"Average Return: Best vs Worst TRPOR Noise on {env_id}",
     )
 
   # Best vs worst noise for TRPO
@@ -771,21 +773,36 @@ def report(compare_dir, env_id):
       perf_dict,
       compare_dir,
       "episode_trpo_best_worst_noise.png",
-      f"Episode Reward: Best vs Worst TRPO Noise on {env_id}",
+      f"Average Return: Best vs Worst TRPO Noise on {env_id}",
     )
 
   # Scatter plot for TRPOR variations
   trpor_perfs = [p for p in model_performances if "trpor" in p["variant"].lower()]
-  plot_scatter_variations(trpor_perfs, compare_dir, "scatter_trpor_variations.png", f"Scatter: TRPOR Variations on {env_id} (AUC vs Final Reward)")
+  plot_scatter_variations(trpor_perfs, compare_dir, "scatter_trpor_variations.png", f"Scatter: TRPOR Variations on {env_id} (AUC vs Final Return)")
 
   # Scatter plot for TRPO variations
   trpo_perfs = [p for p in model_performances if "trpo" in p["variant"].lower() and "trpor" not in p["variant"].lower()]
-  plot_scatter_variations(trpo_perfs, compare_dir, "scatter_trpo_variations.png", f"Scatter: TRPO Variations on {env_id} (AUC vs Final Reward)")
+  plot_scatter_variations(trpo_perfs, compare_dir, "scatter_trpo_variations.png", f"Scatter: TRPO Variations on {env_id} (AUC vs Final Return)")
 
   generate_report(model_performances, env_id)
 
 
 if __name__ == "__main__":
+  import matplotlib as mpl
+
+  mpl.rcParams.update(
+    {
+      "font.family": "sans-serif",
+      "font.sans-serif": ["Helvetica", "Arial"],
+      "font.size": 12,
+      "axes.labelsize": 12,
+      "axes.titlesize": 14,
+      "legend.fontsize": 10,
+      "xtick.labelsize": 10,
+      "ytick.labelsize": 10,
+      "axes.grid": True,
+    }
+  )
   base_compare_dir = "assets"
   subdirs = sorted(os.listdir(base_compare_dir))
   print("# Table of Contents")

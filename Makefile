@@ -4,11 +4,10 @@ OS := $(shell uname -s)
 
 DEVICE=cpu
 
+default: install
 
 ubuntu:
-	@if [ "$(OS)" != "Linux" ]; then \
-		YPATH=".noise/2025-03-10_07-15-27/GenPPO_100000_reward_action_5_runs.yml;.noise/2025-03-09_07-39-20/GenPPO_100000_reward_action_5_runs.yml;.noise/2025-03-08_10-51-44/GenPPO_100000_reward_action_5_runs.yml;.noise/2025-03-05_18-34-02/GenTRPO_100000_reward_action_5_runs.yml;.noise/2025-03-05_02-24-05/PPO_100000_reward_action_5_runs.yml;.noise/2025-03-05_02-24-05/TRPO_100000_reward_action_5_runs.yml;.noise/2025-03-05_02-24-05/TRPOER_100000_reward_action_5_runs.yml;.noise/2025-03-05_02-24-05/TRPOR_100000_reward_action_5_runs.yml"
-	elif ! command -v lsb_release > /dev/null; then \
+	if ! command -v lsb_release > /dev/null; then \
 		echo "lsb_release not found, skipping Ubuntu setup."; \
 	elif ! lsb_release -a 2>/dev/null | grep -q "Ubuntu"; then \
 		echo "Not an Ubuntu system, skipping."; \
@@ -20,14 +19,13 @@ ubuntu:
 		sudo apt-get -y install swig python-box2d; \
 	fi
 
-
 venv:
 	@test -d .venv || python3.12 -m venv .venv
 	@. .venv/bin/activate && \
 	pip install --upgrade pip && \
 	pip install -r requirements.txt
 
-install: ubuntu venv
+install: venv
 
 fix:
 	@echo "Will run black and isort on modified, added, untracked, or staged Python files"
